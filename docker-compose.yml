@@ -7,9 +7,9 @@ services:
       dockerfile: Dockerfile
       args:
         BUILDKIT_INLINE_CACHE: "0"
-    image: vulcan
+    image: calehh/vicuna_infer_base:latest
     shm_size: '64gb'
-    command: ask_ai.py  --base_model '/data/llama-7b-hf' --lora_weights '/data/alpaca-lora-7b' --sentence_model '/data/all-mpnet-base-v2' #执行文件
+    command: ask_ai.py  --base_model '/data/llama-7b-hf' --lora_weights '/data/alpaca-lora-7b' --sentence_model '/data/all-mpnet-base-v2' #执行文件，参数对应模型挂载路径
     restart: unless-stopped
     volumes:
       - /data/llama-7b-hf:/data/llama-7b-hf  # llm模型权重存储的位置
