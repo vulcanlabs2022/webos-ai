@@ -3,6 +3,7 @@
 
 1.模型准备
 分别在/data/目录下，从huggingface下载下面3个模型
+
 1.1 git clone https://huggingface.co/decapoda-research/llama-7b-hf 
 
 1.2 git clone https://huggingface.co/chainyo/alpaca-lora-7b
