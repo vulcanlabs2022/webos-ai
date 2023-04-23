@@ -51,18 +51,31 @@ class MainHandler(tornado.web.RequestHandler):
         self.write({"status": 1})
 
 # 切分文件
-def custom_text_splitter(text, chunk_size=512, chunk_overlap=64):
+# def custom_text_splitter(text, chunk_size=512, chunk_overlap=64):
+#     chunks = []
+#     start = 0
+#     while start < len(text):
+#         end = min(start + chunk_size, len(text))
+#         chunk = text[start:end]
+#         chunks.append(chunk)
+#         if end == len(text):
+#             break
+#         start = end - chunk_overlap
+#     return chunks
+# 重构根据单词数来切分
+def custom_text_splitter(text, chunk_size=128, chunk_overlap=16):
     chunks = []
     start = 0
-    while start < len(text):
-        end = min(start + chunk_size, len(text))
-        chunk = text[start:end]
+    words = text.split()
+
+    while start < len(words):
+        end = min(start + chunk_size, len(words))
+        chunk = " ".join(words[start:end])
         chunks.append(chunk)
-        if end == len(text):
+        if end == len(words):
             break
         start = end - chunk_overlap
     return chunks
-
 
 def split_text(text):
     texts = custom_text_splitter(text)

@@ -1,14 +1,16 @@
 # webos-ai
 0. 服务器CUDA版本需要为11.7
 
-1. 模型准备
-分别在/data/目录下，从huggingface下载下面3个模型
+1. 新版本模型准备
+分别在/data/目录下，从huggingface下载下面1个模型
+   1. /data/目录下删除llama-7b-hf 文件夹
+   2. git clone https://huggingface.co/yahma/llama-7b-hf 
 
-   1. git clone https://huggingface.co/decapoda-research/llama-7b-hf 
+[//]: # (   2. git clone https://huggingface.co/chainyo/alpaca-lora-7b)
 
-   2. git clone https://huggingface.co/chainyo/alpaca-lora-7b
+[//]: # ()
+[//]: # (   3.  git clone https://huggingface.co/sentence-transformers/all-mpnet-base-v2)
 
-   3.  git clone https://huggingface.co/sentence-transformers/all-mpnet-base-v2
 
 2. docker安装 
 https://docs.docker.com/engine/install/centos/
