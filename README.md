@@ -1,10 +1,11 @@
 # webos-ai
 0. 服务器CUDA版本需要为11.7
 
-1. 新版本模型准备
+1. 更新流程
 分别在/data/目录下，从huggingface下载下面1个模型
-   1. /data/目录下删除llama-7b-hf 文件夹
-   2. git clone https://huggingface.co/yahma/llama-7b-hf 
+   1. 删除/data/llama-7b-hf模型参数文件。更新为拉取新的模型文件git clone https://huggingface.co/yahma/llama-7b-hf
+   2. 删除/data/alpaca-lora-7b模型参数文件。更新为本仓库下alpaca-lora-7b目录
+   3. all-mpnet-base-v2保持不变
 
 [//]: # (   2. git clone https://huggingface.co/chainyo/alpaca-lora-7b)
 
