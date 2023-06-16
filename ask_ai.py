@@ -1,173 +1,94 @@
-import argparse
-import logging
-import traceback
-import transformers
-logging.basicConfig(level=logging.INFO,
-                    filename='',
-                    datefmt='%Y/%m/%d %H:%M:%S',
-                    format='%(asctime)s [%(levelname)s]%(filename)s:%(lineno)d %(module)s %(message)s')
-import sys
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-from concurrent.futures import ThreadPoolExecutor
-from langchain import FAISS
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-from peft import PeftModel
-from transformers import LlamaTokenizer, LlamaForCausalLM, GenerationConfig, AutoTokenizer, AutoModelForCausalLM
-import nvgpu
+'''非流式输出'''
+
 import json
-import tornado.gen
-import tornado.ioloop
-import tornado.web
+from loguru import logger
+import os
+import tornado
+from llama_cpp import Llama
 from tornado import ioloop
-from tornado.concurrent import run_on_executor
+from tornado.options import define, options
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+import langchain
+from langchain.embeddings import SentenceTransformerEmbeddings
+from langchain.callbacks.manager import CallbackManager
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+import json
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from tornado.escape import json_decode
-from tornado.options import define, parse_command_line, options
-from transformers import LogitsWarper
-import torch
+from langchain.vectorstores import FAISS
+from utils.conversation import conv_templates, get_default_conv_template, SeparatorStyle
+langchain.verbose = False
+import os
+path1 = os.path.abspath('.')
 
+def load_faiss_db(db_path,embeddings):
+    db = FAISS.load_local(db_path,embeddings = embeddings)
+    return db
 
-from utils.callbacks import Iteratorize, Stream
-from utils.prompter import Prompter
-prompter = Prompter("")
-user_history = {}
+def merge_faiss_db(db_paths,embeddings):
+    db0 = load_faiss_db(db_paths[0],embeddings = embeddings)
+    [db0.merge_from(load_faiss_db(i,embeddings = embeddings)) for i in db_paths[1:]]
+    return db0
 
-class CallbackLogitsWarper(LogitsWarper):
-    def __init__(self, tokenizer, callback):
-        self.tokenizer = tokenizer
-        self.callback = callback
-        self.res_tokens = []
-
-    def __call__(self, input_ids: torch.Tensor, scores: torch.Tensor) -> torch.FloatTensor:
-        self.res_tokens.append(input_ids[0][-1])
-        # result = self.tokenizer.decode(self.res_tokens).lstrip()
-        result = self.tokenizer.decode(input_ids[0][-1])
-        self.callback(result)
-        return scores
-
-
-class MainHandler(tornado.web.RequestHandler):
-    def get(self):
-        self.write({"status": 1})
-
-# 切分文件
-# def custom_text_splitter(text, chunk_size=512, chunk_overlap=64):
-#     chunks = []
-#     start = 0
-#     while start < len(text):
-#         end = min(start + chunk_size, len(text))
-#         chunk = text[start:end]
-#         chunks.append(chunk)
-#         if end == len(text):
-#             break
-#         start = end - chunk_overlap
-#     return chunks
-# 重构根据单词数来切分
-def custom_text_splitter(text, chunk_size=128, chunk_overlap=16):
-    chunks = []
-    start = 0
-    words = text.split()
-
-    while start < len(words):
-        end = min(start + chunk_size, len(words))
-        chunk = " ".join(words[start:end])
-        chunks.append(chunk)
-        if end == len(words):
-            break
-        start = end - chunk_overlap
-    return chunks
-
-def split_text(text):
-    texts = custom_text_splitter(text)
-    try:
-        with open('tmp/text_chunks.json', 'w') as f:
-            logger.info("create done")
-            json.dump(texts, f)
-            logger.info("save data done")
-    except Exception as e:
-        logger.info(e)
-        logger.info(traceback.format_exc())
-
-def get_prompt(query, history):
-    prompt = ""
-    for i, (old_query, response) in enumerate(history):
-        response = response.strip().split()
-        if len(response) > 100:
-            response = response[:100]
-        response = ' '.join(response)
-        prompt += "[Round {}]\nInstruction:{}\nResponse:{}\n".format(i, old_query, response)
-    prompt += "[Round {}]\nInstruction:{}\n### Response:".format(len(history), query)
-    return prompt
-
-def evaluate(
-        instruction,
-        history,
-        input=None,
-        temperature=0.6,
-        top_p=0.75,
-        top_k=40,
-        num_beams=1,
-        max_new_tokens=256,
-        user_id=0,
-        is_clean_history=False,
-        **kwargs,
-):
-    if len(history) == 0:
-        prompt = prompter.generate_prompt(instruction, input)
+def evaluate(query,history,text):
+    conv = get_default_conv_template('conv_vicuna_v1_1').copy()
+    if not text:
+        if len(history) == 0:
+            inp = query
+            conv.append_message(conv.roles[0], inp)
+            conv.append_message(conv.roles[1], None)
+        else:
+            for j, sentence in enumerate(history):
+                for i in range(len(sentence)):
+                    if i == 0:
+                        role = "USER"
+                        conv.append_message(role, sentence[0])
+                    else:
+                        role = "ASSISTANT"
+                        conv.append_message(role, sentence[1])
+            inp = query
+            conv.append_message(conv.roles[0], inp)
+            conv.append_message(conv.roles[1], None)
+        prompt = conv.get_prompt()
     else:
-        prompt = get_prompt(instruction,history)
-
-    inputs = tokenizer(prompt, return_tensors="pt")
-    input_ids = inputs["input_ids"].to("cuda")
-    generation_config = GenerationConfig(
-        temperature=temperature,
-        top_p=top_p,
-        top_k=top_k,
-        num_beams=num_beams,
-        repetition_penalty=1.15,
-        **kwargs,
+        if len(history) == 0:
+            inp = "Based on the known information below, please provide a concise and professional answer " \
+                  "to the user's question.,If the answer cannot be obtained from the information provided, " \
+                  "The known content: " + text + "\nquestion:" + query
+            conv.append_message(conv.roles[0], inp)
+            conv.append_message(conv.roles[1], None)
+        else:
+            for j, sentence in enumerate(history):
+                for i in range(len(sentence)):
+                    if i == 0:
+                        role = "USER"
+                        conv.append_message(role, sentence[0])
+                    else:
+                        role = "ASSISTANT"
+                        conv.append_message(role, sentence[1])
+            inp = query
+            conv.append_message(conv.roles[0], inp)
+            conv.append_message(conv.roles[1], None)
+        prompt = conv.get_prompt()
+    logger.debug(prompt)
+    '''流式输出'''
+    stream = llm(
+        prompt,
+        max_tokens=512,
+        stop=["ASSISTANT:"],
+        stream=True
     )
-
-
-    generate_params = {
-        "input_ids": input_ids,
-        "generation_config": generation_config,
-        "return_dict_in_generate": True,
-        "output_scores": True,
-        "max_new_tokens": max_new_tokens,
-    }
-    def generate_with_callback(callback=None, **kwargs):
-        kwargs.setdefault(
-            "stopping_criteria", transformers.StoppingCriteriaList()
-        )
-        kwargs["stopping_criteria"].append(
-            Stream(callback_func=callback)
-        )
-        with torch.no_grad():
-            model.generate(**kwargs)
-
-    def generate_with_streaming(**kwargs):
-        return Iteratorize(
-            generate_with_callback, kwargs, callback=None
-        )
-
-    with generate_with_streaming(**generate_params) as generator:
-        for output in generator:
-            # new_tokens = len(output) - len(input_ids[0])
-            decoded_output = tokenizer.decode(output)
-
-            if output[-1] in [tokenizer.eos_token_id]:
-                break
-
-            yield prompter.get_response(decoded_output)
-
+    # print(stream)
+    return stream
 
 class VicunaHandler(tornado.web.RequestHandler):
     executor = ThreadPoolExecutor(4)
 
     # @tornado.web.asynchronous
     # @tornado.gen.coroutine
-    async def post(self, *args, **kwargs):
+    def post(self, *args, **kwargs):
         ret = {
             "ret": 1,
             "errcode": 1,
@@ -177,42 +98,63 @@ class VicunaHandler(tornado.web.RequestHandler):
             data = json_decode(self.request.body)
 
             query = data.get("query", "")
-            text = data.get("text","")
+            is_file = data.get("is_file",0)
             history = data.get("history",[])
-            if not text:
-                for i in evaluate(query, history,input=None):
+            if not is_file:
+                for i in evaluate(query, history, is_file):
                     # print(i)
-                    ret["response"] = i
+                    if i["choices"][0]["finish_reason"] == "stop":
+                        continue
+                    # print(i["choices"][0]["text"])
+                    ret["response"] += i["choices"][0]["text"]
+                    # print(ret)
                     self.write(ret)
                     self.write('\n')
                     self.flush()
             else:
-                split_text(text)
-                # Load text chunks from file
-                with open('tmp/text_chunks.json', 'r') as f:
-                    logger.info("load data done")
-                    texts = json.load(f)
+                if len(history) == 0:
+                    files = os.listdir("save_index")
+                    new_files = []
+                    for file in files:
+                        new_path = path1 + "/save_index/" + file
+                        new_files.append(new_path)
+                    db = merge_faiss_db(new_files,embeddings=embeddings)
+                    # todo 增加相似得分的判断
+                    docs = db.similarity_search(query, k=2)
+                    simdoc = ""
+                    for doc in docs:
+                        simdoc += doc.page_content
+                    # for i in generate_streaming_completion(query,simdoc):
+                    history = []
+                    for i in evaluate(query, history, simdoc):
+                        if i["choices"][0]["finish_reason"] == "stop":
+                            continue
+                        # print(i["choices"][0]["text"])
+                        ret["response"] += i["choices"][0]["text"]
+                        # print(ret)
+                        self.write(ret)
+                        self.write('\n')
+                        self.flush()
+                    # self.write(ret)
+                else:
+                    for i in evaluate(query, history, 0):
+                        if i["choices"][0]["finish_reason"] == "stop":
+                            continue
+                        ret["response"] += i["choices"][0]["text"]
+                        # print(ret)
+                        self.write(ret)
+                        self.write('\n')
+                        self.flush()
 
-                docsearch = FAISS.from_texts(texts, embeddings)
-
-                docs = docsearch.similarity_search(query, k=2)
-                simdoc = ""
-                for doc in docs:
-                    simdoc += doc.page_content
-                history = []
-                for i in evaluate(query,history,simdoc):
-                    # print(i)
-                    ret["response"] = i
-                    self.write(ret)
-                    self.write('\n')
-                    self.flush()
-
-        except Exception:
-            # data = json_decode(self.request.body)
+        except Exception as e:
+            logger.debug(e)
             pass
-
+        self.write(ret)
         self.finish()
 
+class MainHandler(tornado.web.RequestHandler):
+    def get(self):
+        self.write({"status": 1})
 
 def make_app():
     return tornado.web.Application(
@@ -225,19 +167,15 @@ def make_app():
         debug=False
     )
 
+
 if __name__ == "__main__":
+    import argparse
+
     parser = argparse.ArgumentParser()
-    # parser.add_argument("--model-name", type=str, default="/data/zhanglei/webos/vicuna-13b")
-    parser.add_argument("--base_model", type=str,default="")
-    parser.add_argument("--lora_weights", type=str,default="")
-    parser.add_argument("--sentence_model", type=str, default="")
-    parser.add_argument("--device", type=str, choices=["cpu", "cuda", "mps"], default="cuda")
-    parser.add_argument("--num-gpus", type=str, default="1")
-    parser.add_argument("--load-8bit", action="store_true",
-                        help="Use 8-bit quantization.")
-    parser.add_argument("--conv-template", type=str, default="v1",
-                        help="Conversation prompt template.")
-    parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument("--device", type=str, choices=["cpu", "cuda", "mps"], default="cpu")
+    parser.add_argument("--max-new-tokens", type=int, default=512)
+    parser.add_argument("--cpp_model", type=str, default='')
+    parser.add_argument("--embedding_model", type=str, default='')
     parser.add_argument("--max-new-tokens", type=int, default=512)
     parser.add_argument("--style", type=str, default="simple",
                         choices=["simple", "rich"], help="Display style.")
@@ -245,29 +183,13 @@ if __name__ == "__main__":
     parser.add_argument("--port", default=8087)
     args = parser.parse_args()
 
-    base_model = args.base_model
-    lora_weights = args.lora_weights
-    # lora_weights: str = "/data/zhanglei/webos/alpaca"
-    tokenizer = LlamaTokenizer.from_pretrained(base_model)
-    model = LlamaForCausalLM.from_pretrained(
-        base_model,
-        load_in_8bit=True,
-        torch_dtype=torch.float16,
-        device_map="auto",
-    )
-    model = PeftModel.from_pretrained(
-        model,
-        lora_weights,
-        torch_dtype=torch.float16,
-    )
-
-    embeddings = HuggingFaceEmbeddings(model_name=args.sentence_model)
+    from langchain.embeddings.huggingface import HuggingFaceInstructEmbeddings
+    embeddings = HuggingFaceInstructEmbeddings(model_name=args.embedding_model)
+    callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
+    llm = Llama(model_path=args.cpp_model,n_ctx=2048)
     define("port", default=args.port, help="run on the given port", type=int)
 
     app = make_app()
-    logging.info('zuiyou web listen on %d' % options.port)
+    logger.debug('web listen on %d' % options.port)
     app.listen(options.port, xheaders=True)
     ioloop.IOLoop.instance().start()
-
-
-
