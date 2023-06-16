@@ -20,3 +20,4 @@ langchainplus-sdk==0.0.7
 unstructured==0.7.3
 loguru
 llama-cpp-python==0.1.62
+blinker==1.6.2
