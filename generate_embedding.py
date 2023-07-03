@@ -131,8 +131,8 @@ class GenerateEmbeddingHandler(tornado.web.RequestHandler):
         from langchain.embeddings.huggingface import HuggingFaceInstructEmbeddings
         embeddings = HuggingFaceInstructEmbeddings(model_name=args.embedding_model)
         if action == "update":
-            if os.path.exists("save_index/%s_index" % filepath.replace("/","_")):
-                shutil.rmtree("save_index/%s_index" % filepath.replace("/","_"))
+            if os.path.exists("/data/save_index/%s_index" % filepath.replace("/","_")):
+                shutil.rmtree("/data/save_index/%s_index" % filepath.replace("/","_"))
                 logger.debug("%s has been deleted and next updated "%filepath.replace("/","_"))
             save_index_for_file(file_name, filepath,task_id,embeddings=embeddings)
             logger.debug("%s has been updated " % filepath.replace("/", "_"))
