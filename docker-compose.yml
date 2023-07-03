@@ -2,29 +2,25 @@ version: '3'
 
 services:
   Vulcan-ai:
-    build:
-      context: ./
-      dockerfile: Dockerfile
-      args:
-        BUILDKIT_INLINE_CACHE: "0"
-    image: calehh/vicuna_infer_base:latest
+    image: vulcan
     shm_size: '64gb'
-    command: ask_ai.py  --base_model '/data/llama-7b-hf' --lora_weights '/data/alpaca-lora-7b' --sentence_model '/data/all-mpnet-base-v2' #执行文件，参数对应模型挂载路径
+    command: ask_ai.py  --cpp_model '/data/ggml-model-q4_0.bin'  --embedding_model '/data/instructor-base' --n_threads 4 #执行文件，参数对应模型挂载路径
     restart: unless-stopped
     volumes:
-      - /data/llama-7b-hf:/data/llama-7b-hf  # llm模型权重存储的位置
-      - /data/alpaca-lora-7b:/data/alpaca-lora-7b # lora模型存储的位置
-      - /data/all-mpnet-base-v2:/data/all-mpnet-base-v2  # 文本相似模型存储的位置
+      - /data/3b_ggml-model-q4_0.bin:/data/3b_ggml-model-q4_0.bin  # cpp模型权重存储的位置
+      - /data/instructor-base:/data/instructor-base # 相似模型存储的位置
+      - /data/save_index:/data/save_index
     ports:
       - 8087:8087 #端口
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
 
-volumes:
-  Vulcan-ai:
-    name: Vulcan-ai
+
+  Vulcan-ai1:
+    image: vulcan
+    shm_size: '64gb'
+    command: generate_embedding.py  --embedding_model '/data/instructor-base' --back_url http://searcher:6317/api/callback/vector #执行文件，参数对应模型挂载路径
+    restart: unless-stopped
+    volumes:
+      - /data/instructor-base:/data/instructor-base # 相似模型存储的位置
+      - /data/save_index:/data/save_index
+    ports:
+      - 8085:8085 #端口

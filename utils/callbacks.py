@@ -3,6 +3,7 @@ import traceback
 from queue import Queue
 from threading import Thread
 
+import torch
 import transformers
 
 
