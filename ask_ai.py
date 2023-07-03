@@ -128,7 +128,7 @@ class VicunaHandler(tornado.web.RequestHandler):
                         continue
                     # print(i["choices"][0]["text"])
                     ret["response"] += i["choices"][0]["text"]
-                    # print(ret)
+                    logger.debug(ret)
                     self.write(ret)
                     self.write('\n')
                     self.flush()
@@ -153,7 +153,7 @@ class VicunaHandler(tornado.web.RequestHandler):
                             continue
                         # print(i["choices"][0]["text"])
                         ret["response"] += i["choices"][0]["text"]
-                        # print(ret)
+                        logger.debug(ret)
                         self.write(ret)
                         self.write('\n')
                         self.flush()
@@ -163,7 +163,7 @@ class VicunaHandler(tornado.web.RequestHandler):
                         if i["choices"][0]["finish_reason"] == "stop":
                             continue
                         ret["response"] += i["choices"][0]["text"]
-                        # print(ret)
+                        logger.debug(ret)
                         self.write(ret)
                         self.write('\n')
                         self.flush()
@@ -186,7 +186,7 @@ class VicunaHandler(tornado.web.RequestHandler):
                     if len(simdoc) == 0:
                         # todo 转成世界知识问答？？
                         ret["response"] = "Sorry, I can't get any useful information based on the question"
-                        # print(ret)
+                        logger.debug(ret)
                         self.write(ret)
                         self.write('\n')
                         self.flush()
@@ -198,7 +198,7 @@ class VicunaHandler(tornado.web.RequestHandler):
                                 continue
                             # print(i["choices"][0]["text"])
                             ret["response"] += i["choices"][0]["text"]
-                            # print(ret)
+                            logger.debug(ret)
                             self.write(ret)
                             self.write('\n')
                             self.flush()
@@ -208,7 +208,7 @@ class VicunaHandler(tornado.web.RequestHandler):
                         if i["choices"][0]["finish_reason"] == "stop":
                             continue
                         ret["response"] += i["choices"][0]["text"]
-                        # print(ret)
+                        logger.debug(ret)
                         self.write(ret)
                         self.write('\n')
                         self.flush()
@@ -218,6 +218,7 @@ class VicunaHandler(tornado.web.RequestHandler):
             logger.debug(e)
             pass
         self.write(ret)
+        logger.debug(ret)
         self.finish()
 
 class MainHandler(tornado.web.RequestHandler):
@@ -246,6 +247,7 @@ if __name__ == "__main__":
     parser.add_argument("--embedding_model", type=str, default='')
     parser.add_argument("--style", type=str, default="simple",
                         choices=["simple", "rich"], help="Display style.")
+    parser.add_argument("--n_threads", type=int,default=4)
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--port", default=8087)
     args = parser.parse_args()
@@ -253,7 +255,7 @@ if __name__ == "__main__":
     from langchain.embeddings.huggingface import HuggingFaceInstructEmbeddings
     embeddings = HuggingFaceInstructEmbeddings(model_name=args.embedding_model)
     callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
-    llm = Llama(model_path=args.cpp_model,n_ctx=2048)
+    llm = Llama(model_path=args.cpp_model,n_ctx=2048,n_threads=args.n_threads)
     define("port", default=args.port, help="run on the given port", type=int)
 
     app = make_app()

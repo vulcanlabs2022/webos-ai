@@ -82,7 +82,7 @@ def save_index_for_file(filename,filepath,task_id,embeddings):
     db = FAISS.from_documents(docs, embeddings)
     db.save_local("/data/save_index/%s_index"%filepath.replace("/","_"))
     if os.path.exists("/data/save_index/%s_index" % filepath.replace("/","_")):
-        logger.debug("%s has been added"%filepath.replace("/","_"))
+        logger.debug("%s has been processed"%filepath.replace("/","_"))
         #todo 回调函数
         callback_(task_id,0)
     else:
@@ -93,6 +93,8 @@ class GenerateEmbeddingHandler(tornado.web.RequestHandler):
     # @tornado.web.asynchronous
     # @tornado.gen.coroutine
     def post(self, *args, **kwargs):
+        self.write("ok")
+        self.finish()
         ret = {
             "ret": 1,
             "errcode": 1,
@@ -123,19 +125,20 @@ class GenerateEmbeddingHandler(tornado.web.RequestHandler):
             logger.debug(e)
             pass
 
-        self.write(ret)
-        self.finish()
+        # self.write(ret)
+        # self.finish()
     def generate_embedding(self,file_name,filepath,action,task_id):
         from langchain.embeddings.huggingface import HuggingFaceInstructEmbeddings
         embeddings = HuggingFaceInstructEmbeddings(model_name=args.embedding_model)
         if action == "update":
-            # if os.path.exists("save_index/%s_index" % filepath.replace("/","_")):
-            #     shutil.rmtree("save_index/%s_index" % filepath.replace("/","_"))
-            #     logger.debug("%s has been deleted and next updated "%filepath.replace("/","_"))
+            if os.path.exists("save_index/%s_index" % filepath.replace("/","_")):
+                shutil.rmtree("save_index/%s_index" % filepath.replace("/","_"))
+                logger.debug("%s has been deleted and next updated "%filepath.replace("/","_"))
             save_index_for_file(file_name, filepath,task_id,embeddings=embeddings)
             logger.debug("%s has been updated " % filepath.replace("/", "_"))
         elif action == "add":
             save_index_for_file(file_name, filepath,task_id,embeddings=embeddings)
+            logger.debug("%s has been added " % filepath.replace("/", "_"))
         elif action == "delete":
             if os.path.exists("/data/save_index/%s_index" % filepath.replace("/","_")):
                 shutil.rmtree("/data/save_index/%s_index" % filepath.replace("/","_"))

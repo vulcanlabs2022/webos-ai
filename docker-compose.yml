@@ -4,10 +4,10 @@ services:
   Vulcan-ai:
     image: vulcan
     shm_size: '64gb'
-    command: ask_ai.py  --cpp_model '/data/ggml-model-q4_0.bin'  --embedding_model '/data/instructor-base' #执行文件，参数对应模型挂载路径
+    command: ask_ai.py  --cpp_model '/data/ggml-model-q4_0.bin'  --embedding_model '/data/instructor-base' --n_threads 4 #执行文件，参数对应模型挂载路径
     restart: unless-stopped
     volumes:
-      - /data/ggml-model-q4_0.bin:/data/ggml-model-q4_0.bin  # cpp模型权重存储的位置
+      - /data/3b_ggml-model-q4_0.bin:/data/3b_ggml-model-q4_0.bin  # cpp模型权重存储的位置
       - /data/instructor-base:/data/instructor-base # 相似模型存储的位置
       - /data/save_index:/data/save_index
     ports:
