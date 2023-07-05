@@ -124,8 +124,8 @@ class VicunaHandler(tornado.web.RequestHandler):
             if type == "basic":
                 for i in evaluate(query, history, text):
                     # print(i)
-                    if i["choices"][0]["finish_reason"] == "stop":
-                        continue
+                    # if i["choices"][0]["finish_reason"] == "stop":
+                    #     continue
                     # print(i["choices"][0]["text"])
                     ret["response"] += i["choices"][0]["text"]
                     logger.debug(ret)
@@ -149,8 +149,8 @@ class VicunaHandler(tornado.web.RequestHandler):
                     # for i in generate_streaming_completion(query,simdoc):
                     history = []
                     for i in evaluate(query, history, simdoc):
-                        if i["choices"][0]["finish_reason"] == "stop":
-                            continue
+                        # if i["choices"][0]["finish_reason"] == "stop":
+                        #     continue
                         # print(i["choices"][0]["text"])
                         ret["response"] += i["choices"][0]["text"]
                         logger.debug(ret)
@@ -160,8 +160,8 @@ class VicunaHandler(tornado.web.RequestHandler):
                     # self.write(ret)
                 else:
                     for i in evaluate(query, history, ""):
-                        if i["choices"][0]["finish_reason"] == "stop":
-                            continue
+                        # if i["choices"][0]["finish_reason"] == "stop":
+                        #     continue
                         ret["response"] += i["choices"][0]["text"]
                         logger.debug(ret)
                         self.write(ret)
@@ -194,8 +194,8 @@ class VicunaHandler(tornado.web.RequestHandler):
                         # for i in generate_streaming_completion(query,simdoc):
                         history = []
                         for i in evaluate(query, history, simdoc):
-                            if i["choices"][0]["finish_reason"] == "stop":
-                                continue
+                            # if i["choices"][0]["finish_reason"] == "stop":
+                            #     continue
                             # print(i["choices"][0]["text"])
                             ret["response"] += i["choices"][0]["text"]
                             logger.debug(ret)
@@ -205,8 +205,8 @@ class VicunaHandler(tornado.web.RequestHandler):
                     # self.write(ret)
                 else:
                     for i in evaluate(query, history, 0):
-                        if i["choices"][0]["finish_reason"] == "stop":
-                            continue
+                        # if i["choices"][0]["finish_reason"] == "stop":
+                        #     continue
                         ret["response"] += i["choices"][0]["text"]
                         logger.debug(ret)
                         self.write(ret)
