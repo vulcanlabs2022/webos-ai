@@ -1,6 +1,6 @@
 # webos-ai
 0. 分别在/data/目录下，从huggingface下载下面2个模型
-   1. 拉取新的模型文件git clone https://huggingface.co/vulcanlabs/3b_v1.0
+   1. 拉取新的模型文件git clone https://huggingface.co/vulcanlabs/3b_v1.1
    2. 拉取新的模型文件git clone https://huggingface.co/hkunlp/instructor-base
 
 
