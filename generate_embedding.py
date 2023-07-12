@@ -11,7 +11,7 @@ from tornado import ioloop
 from tornado.options import define, parse_command_line, options
 from tornado.escape import json_decode
 from langchain.vectorstores import FAISS
-from langchain.document_loaders import UnstructuredFileLoader, TextLoader, PyPDFLoader
+from langchain.document_loaders import UnstructuredFileLoader, TextLoader, PyPDFLoader,Docx2txtLoader
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
@@ -28,6 +28,9 @@ def load_data_by_langchain(filepath):
     elif filepath.lower().endswith(".pdf"):
         loader = PyPDFLoader(filepath)
         docs = loader.load_and_split()
+    elif filepath.lower().endswith(".docx"):
+        loader = Docx2txtLoader(filepath)
+        docs = loader.load()
     # elif filepath.lower().endswith(".pdf"):
     #     loader = UnstructuredPaddlePDFLoader(filepath)
     #     docs = loader.load()
