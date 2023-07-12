@@ -116,13 +116,13 @@ class VicunaHandler(tornado.web.RequestHandler):
         }
         try:
             data = json_decode(self.request.body)
-
+            logger.debug("Assistant start")
             query = data.get("query", "")
             type = data.get("type","")
-            text = data.get("text","")
+            path = data.get("path","")
             history = data.get("history",[])
             if type == "basic":
-                for i in evaluate(query, history, text):
+                for i in evaluate(query, history, ''):
                     # print(i)
                     # if i["choices"][0]["finish_reason"] == "stop":
                     #     continue
@@ -134,29 +134,50 @@ class VicunaHandler(tornado.web.RequestHandler):
                     self.flush()
             elif type == "single_doc":
                 if len(history) == 0:
-                    split_text(text)
-                    # Load text chunks from file
-                    with open('text_chunks.json', 'r') as f:
-                        texts = json.load(f)
-                    docsearch = FAISS.from_texts(texts, embeddings)
-
-                    docs = docsearch.similarity_search_with_score(query, k=2)
+                    logger.debug("%s process doc" % type)
+                    # 判断是否已经建过索引
+                    if os.path.exists("/data/save_index/%s_index" % path.replace("/", "_")):
+                        logger.debug("%s index had been added"%path)
+                        docsearch = load_faiss_db("/data/save_index/%s_index" % path.replace("/", "_"),embeddings)
+                    else:
+                        text = ""
+                        for i in load_data_by_langchain(path):
+                            text += i.page_content
+                        # text = load_data_by_langchain(file_name)[0].page_content
+                        split_texts = custom_text_splitter(text)
+                        docs = []
+                        for one_conent in split_texts:
+                            # docs = load_file("microsoft.txt",sentence_size=SENTENCE_SIZE)
+                            docs.append(Document(page_content=one_conent + "\n", metadata={"source": filepath}))
+                        docsearch = FAISS.from_documents(docs, embeddings)
+                        docsearch.save_local("/data/save_index/%s_index" % path.replace("/", "_"))
+                        logger.debug("%s index has been added" % path)
+                    docs = docsearch.similarity_search_with_score(query, k=1)
                     simdoc = ""
                     for doc in docs:
-                        if doc[1] <= 0.25:
-                            continue
-                        simdoc += doc[0].page_content
-                    # for i in generate_streaming_completion(query,simdoc):
-                    history = []
-                    for i in evaluate(query, history, simdoc):
-                        # if i["choices"][0]["finish_reason"] == "stop":
+                        # if doc[1] <= 0.3:
                         #     continue
-                        # print(i["choices"][0]["text"])
-                        ret["response"] += i["choices"][0]["text"]
+                        simdoc += doc[0].page_content
+                    logger.debug("%s search doc done"%type)
+                    if len(simdoc) == 0:
+                        # todo 转成世界知识问答？？
+                        ret["response"] = "Sorry, I can't get any useful information based on the question"
                         logger.debug(ret)
                         self.write(ret)
                         self.write('\n')
                         self.flush()
+                    else:
+                    # for i in generate_streaming_completion(query,simdoc):
+                        history = []
+                        for i in evaluate(query, history, simdoc):
+                            # if i["choices"][0]["finish_reason"] == "stop":
+                            #     continue
+                            # print(i["choices"][0]["text"])
+                            ret["response"] += i["choices"][0]["text"]
+                            logger.debug(ret)
+                            self.write(ret)
+                            self.write('\n')
+                            self.flush()
                     # self.write(ret)
                 else:
                     for i in evaluate(query, history, ""):
@@ -170,48 +191,100 @@ class VicunaHandler(tornado.web.RequestHandler):
 
             elif type == "full_doc":
                 if len(history) == 0:
+                    logger.debug("%s process doc" % type)
+
                     files = os.listdir("/data/save_index")
                     new_files = []
                     for file in files:
                         new_path = '/data' + "/save_index/" + file
                         new_files.append(new_path)
                     logger.debug("the index num is %s"%len(new_files))
-                    db = merge_faiss_db(new_files,embeddings=embeddings)
-                    # todo 增加相似得分的判断
-                    docs = db.similarity_search_with_score(query, k=2)
-                    simdoc = ""
-                    for doc in docs:
-                        if doc[1]<=0.3:
-                            simdoc += doc[0].page_content
-                    if len(simdoc) == 0:
-                        # todo 转成世界知识问答？？
-                        ret["response"] = "Sorry, I can't get any useful information based on the question"
+                    if len(new_files) == 0:
+                        ret["response"] = "Sorry, I can't get any embedding files, please check the embedding file is existed?"
                         logger.debug(ret)
                         self.write(ret)
                         self.write('\n')
                         self.flush()
                     else:
-                        # for i in generate_streaming_completion(query,simdoc):
-                        history = []
-                        for i in evaluate(query, history, simdoc):
+                        db = merge_faiss_db(new_files,embeddings=embeddings)
+                        # todo 增加相似得分的判断
+                        docs = db.similarity_search_with_score(query, k=1)
+                        simdoc = ""
+                        for doc in docs:
+                            if doc[1]<=0.3:
+                                simdoc += doc[0].page_content
+                        logger.debug("%s search doc done"%type)
+                        if len(simdoc) == 0:
+                            # todo 转成世界知识问答？？
+                            ret["response"] = "Sorry, I can't get any useful information based on the question"
+                            logger.debug(ret)
+                            self.write(ret)
+                            self.write('\n')
+                            self.flush()
+                        else:
+                            # for i in generate_streaming_completion(query,simdoc):
+                            history = []
+                            for i in evaluate(query, history, simdoc):
+                                # if i["choices"][0]["finish_reason"] == "stop":
+                                #     continue
+                                # print(i["choices"][0]["text"])
+                                ret["response"] += i["choices"][0]["text"]
+                                logger.debug(ret)
+                                self.write(ret)
+                                self.write('\n')
+                                self.flush()
+                    # self.write(ret)
+                else:
+                    no_index_answer = "Sorry, I can't get any embedding files, please check the embedding file is existed?"
+                    if history[-1][1] == no_index_answer:
+                        files = os.listdir("/data/save_index")
+                        new_files = []
+                        for file in files:
+                            new_path = '/data' + "/save_index/" + file
+                            new_files.append(new_path)
+                        if len(new_files) == 0:
+                            ret["response"] = "Sorry, I can't get any embedding files, please check the embedding file is existed?"
+                            logger.debug(ret)
+                            self.write(ret)
+                            self.write('\n')
+                            self.flush()
+                        else:
+                            db = merge_faiss_db(new_files, embeddings=embeddings)
+                            # todo 增加相似得分的判断
+                            docs = db.similarity_search_with_score(query, k=1)
+                            simdoc = ""
+                            for doc in docs:
+                                if doc[1] <= 0.3:
+                                    simdoc += doc[0].page_content
+                            logger.debug("%s search doc done" % type)
+                            if len(simdoc) == 0:
+                                # todo 转成世界知识问答？？
+                                ret["response"] = "Sorry, I can't get any useful information based on the question"
+                                logger.debug(ret)
+                                self.write(ret)
+                                self.write('\n')
+                                self.flush()
+                            else:
+                                # for i in generate_streaming_completion(query,simdoc):
+                                history = []
+                                for i in evaluate(query, history, simdoc):
+                                    # if i["choices"][0]["finish_reason"] == "stop":
+                                    #     continue
+                                    # print(i["choices"][0]["text"])
+                                    ret["response"] += i["choices"][0]["text"]
+                                    logger.debug(ret)
+                                    self.write(ret)
+                                    self.write('\n')
+                                    self.flush()
+                    else:
+                        for i in evaluate(query, history, ''):
                             # if i["choices"][0]["finish_reason"] == "stop":
                             #     continue
-                            # print(i["choices"][0]["text"])
                             ret["response"] += i["choices"][0]["text"]
                             logger.debug(ret)
                             self.write(ret)
                             self.write('\n')
                             self.flush()
-                    # self.write(ret)
-                else:
-                    for i in evaluate(query, history, 0):
-                        # if i["choices"][0]["finish_reason"] == "stop":
-                        #     continue
-                        ret["response"] += i["choices"][0]["text"]
-                        logger.debug(ret)
-                        self.write(ret)
-                        self.write('\n')
-                        self.flush()
             else:
                 logger.debug("type is not matched")
         except Exception as e:

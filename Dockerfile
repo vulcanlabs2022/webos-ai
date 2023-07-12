@@ -19,5 +19,7 @@ RUN python3.10 -m pip install -r requirements.txt --ignore-installed -i http://m
 RUN python3.10 -m pip install InstructorEmbedding==1.0.1 -i http://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 RUN python3.10 -m pip install scikit-learn==1.2.2 -i http://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 RUN python3.10 -m pip install pypdf==3.9.1 -i http://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+RUN python3.10 -m pip install docx2txt -i http://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+RUN python3.10 -m pip install llama-cpp-python==0.1.70 -i http://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 COPY . .
 ENTRYPOINT [ "python3.10"]
